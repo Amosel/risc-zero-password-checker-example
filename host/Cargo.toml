@@ -8,3 +8,4 @@ password-checker-methods = { path = "../methods" }
 password-checker-shared = { path = "../shared" }
 risc0-zkvm = { version = "0.16.1" }
 serde = "1.0"
+rand = "0.8"
