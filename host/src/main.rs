@@ -1,39 +1,69 @@
-// TODO: Update the name of the method loaded by the prover. E.g., if the method
-// is `multiply`, replace `METHOD_NAME_ELF` with `MULTIPLY_ELF` and replace
-// `METHOD_NAME_ID` with `MULTIPLY_ID`
-use methods::{METHOD_NAME_ELF, METHOD_NAME_ID};
+// Copyright 2023 RISC Zero, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use password_checker_shared::PasswordRequest;
+use password_checker_methods::PW_CHECKER_ELF;
+use rand::prelude::*;
 use risc0_zkvm::{
     default_executor_from_elf,
     serde::{from_slice, to_vec},
+    sha::Digest,
     ExecutorEnv,
 };
 
 fn main() {
-    // First, we construct an executor environment
-    let env = ExecutorEnv::builder().build().unwrap();
+    let mut rng = StdRng::from_entropy();
+    let mut salt = [0u8; 32];
+    rng.fill_bytes(&mut salt);
 
-    // TODO: add guest input to the executor environment using
-    // ExecutorEnvBuilder::add_input().
-    // To access this method, you'll need to use the alternate construction
-    // ExecutorEnv::builder(), which creates an ExecutorEnvBuilder. When you're
-    // done adding input, call ExecutorEnvBuilder::build().
+    let request = PasswordRequest {
+        password: "S00perSecr1t!!!".into(),
+        salt,
+    };
 
-    // For example:
-    // let env = ExecutorEnv::builder().add_input(&vec).build().unwrap();
+    let password_hash = password_checker(request);
+    println!("Password hash is: {}", &password_hash);
+}
 
-    // Next, we make an executor, loading the (renamed) ELF binary.
-    let mut exec = default_executor_from_elf(env, METHOD_NAME_ELF).unwrap();
+fn password_checker(request: PasswordRequest) -> Digest {
+    let env = ExecutorEnv::builder()
+        .add_input(&to_vec(&request).unwrap())
+        .build()
+        .unwrap();
 
-    // Run the executor to produce a session.
+    let mut exec = default_executor_from_elf(env, PW_CHECKER_ELF).unwrap();
     let session = exec.run().unwrap();
 
-    // Prove the session to produce a receipt.
     let receipt = session.prove().unwrap();
 
-    // TODO: Implement code for transmitting or serializing the receipt for
-    // other parties to verify here
+    from_slice(&receipt.journal).unwrap()
+}
 
-    // Optional: Verify receipt to confirm that recipients will also be able to
-    // verify your receipt
-    receipt.verify(METHOD_NAME_ID).unwrap();
+#[cfg(test)]
+mod tests {
+    use password_checker_core::PasswordRequest;
+
+    #[test]
+    fn main() {
+        const TEST_SALT: [u8; 32] = [0u8; 32];
+        const TEST_PASSWORD: &str = "S00perSecr1t!!!";
+
+        let request = PasswordRequest {
+            password: TEST_PASSWORD.into(),
+            salt: TEST_SALT,
+        };
+
+        super::password_checker(request);
+    }
 }
